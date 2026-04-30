@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Web GIS - Районирование с учетом барьеров</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+
+    <div id="layersPanel">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <b style="font-size: 16px;">Геоданные</b>
+            <span class="badge">GPX / GeoJSON / SHP</span>
+        </div>
+        <hr>
+
+        <div class="layer-group">
+            <h4 onclick="toggleGroup(this)">
+                <span class="toggle-icon">▼</span> Здания и население
+            </h4>
+            <div class="layer-group-content">
+                <div class="layerItem">
+                    <label>
+                        <input type="checkbox" class="layer-checkbox" data-layer="buildings" checked>
+                        <span class="layer-color" style="background:#ff6b6b;"></span>
+                        Жилые здания (с населением)
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="layer-group">
+            <h4 onclick="toggleGroup(this)">
+                <span class="toggle-icon">▼</span> Барьерные слои
+            </h4>
+            <div class="layer-group-content">
+                <div class="layerItem">
+                    <label>
+                        <input type="checkbox" class="barrier-checkbox" data-barrier="water" checked>
+                        <span class="layer-color" style="background:#4fc3f7;"></span>
+                        Водные пути (барьер)
+                    </label>
+                </div>
+                <div class="layerItem">
+                    <label>
+                        <input type="checkbox" class="barrier-checkbox" data-barrier="parks" checked>
+                        <span class="layer-color" style="background:#81c784;"></span>
+                        Парки (барьер)
+                    </label>
+                </div>
+                <div class="layerItem">
+                    <label>
+                        <input type="checkbox" class="barrier-checkbox" data-barrier="graveyard" checked>
+                        <span class="layer-color" style="background:#8d6e63;"></span>
+                        Кладбища (барьер)
+                    </label>
+                </div>
+                <div class="layerItem">
+                    <label>
+                        <input type="checkbox" class="barrier-checkbox" data-barrier="polygons">
+                        <span class="layer-color" style="background:#ab47bc;"></span>
+                        Полигоны (барьер)
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="layer-group">
+            <h4 onclick="toggleGroup(this)">
+                <span class="toggle-icon">▼</span> Прочие объекты
+            </h4>
+            <div class="layer-group-content">
+                <div class="layerItem">
+                    <label>
+                        <input type="checkbox" class="layer-checkbox" data-layer="attract">
+                        <span class="layer-color" style="background:#ffb74d;"></span>
+                        Здания (но желтые)
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 20px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #dee2e6; padding-top: 10px;">
+            Клик по слою → загрузка данных<br>
+            Барьерные слои влияют на районирование
+        </div>
+    </div>
+
+    <div id="clusteringPanel">
+        <div class="clustering-card">
+            <div class="clustering-card-header">
+                Районирование с учетом барьеров
+            </div>
+            <div class="clustering-card-body">
+                <div class="selection-tools">
+                    <button id="selectRectangleBtn" class="active">Прямоугольник</button>
+                    <button id="selectCircleBtn">Круг</button>
+                    <button id="clearAreaBtn" class="clear-btn">Очистить</button>
+                </div>
+                
+                <div id="areaStatus" class="status info">
+                    Нажмите на иконку рисования на карте
+                </div>
+                
+                <div class="form-group">
+                    <label>Метод кластеризации:</label>
+                    <select id="clusteringMethod">
+                        <option value="kmeans">K-means (с учетом барьеров)</option>
+                        <option value="dbscan">DBSCAN (с учетом барьеров)</option>
+                    </select>
+                </div>
+                
+                <div id="kmeansParams" class="form-group">
+                    <label>Количество кластеров (K):</label>
+                    <input type="number" id="kmeansClusters" value="4" min="2" max="15">
+                </div>
+                
+                <div id="dbscanParams" style="display:none;" class="form-group">
+                    <label>Epsilon (метров):</label>
+                    <input type="number" id="dbscanEpsilon" value="100" min="20" max="500" step="10">
+                    <label style="margin-top: 8px;">Минимум точек:</label>
+                    <input type="number" id="dbscanMinSamples" value="3" min="2" max="20">
+                </div>
+                
+                <div class="form-group">
+                    <label>Активные барьеры:</label>
+                    <div id="activeBarriersList" class="checkbox-group">
+                        <span style="color:#666;">Выберите барьерные слои слева</span>
+                    </div>
+                </div>
+                
+                <button id="performClusteringBtn" class="btn-primary">Выполнить районирование</button>
+                <button id="clearClusteringBtn" class="btn-danger">Очистить результаты</button>
+                
+                <hr style="margin: 15px 0;">
+
+                <div class="form-group">
+                    <label>Метод построения полигонов:</label>
+                    <select id="polygonMethod">
+                        <option value="convex_hull">Выпуклая оболочка (Convex Hull)</option>
+                        <option value="alpha_shape">Alpha Shape (точный контур)</option>
+                        <option value="concave">Вогнутая оболочка</option>
+                    </select>
+                </div>
+
+                <div id="alphaParams" style="display:none;" class="form-group">
+                    <label>Детализация Alpha Shape:</label>
+                    <input type="range" id="alphaValue" min="0.1" max="0.9" step="0.05" value="0.5">
+                    <span id="alphaValueDisplay">0.5</span>
+                </div>
+
+                <div class="form-group">
+                    <label>Экспорт в формате:</label>
+                    <select id="exportFormat">
+                        <option value="geojson">GeoJSON</option>
+                        <option value="shapefile">Shapefile (SHP)</option>
+                        <option value="csv">CSV (статистика)</option>
+                    </select>
+                </div>
+
+                <button id="generatePolygonsBtn" class="btn-primary" style="background:#6c5ce7;">
+                    Создать полигоны кластеров
+                </button>
+
+                <button id="exportPolygonsBtn" class="btn-primary" style="background:#00b894; margin-top: 5px;">
+                    Экспортировать полигоны
+                </button>
+
+                <div class="form-group">
+                    <label>Показывать притяжение кластеров:</label>
+                    <select id="attractionDisplay">
+                        <option value="score">Числовой показатель</option>
+                        <option value="level">Уровень (1-5)</option>
+                        <option value="force">Текстовое описание</option>
+                        <option value="none">Не показывать</option>
+                    </select>
+                </div>
+
+                <div id="attractionLegend" style="display:none; margin-top: 10px; padding: 8px; background: #f0f0f0; border-radius: 5px;">
+                    <b>Шкала притяжения:</b><br>
+                    <span style="color:#e74c3c;">●</span> Очень сильное (80-100)<br>
+                    <span style="color:#e67e22;">●</span> Сильное (60-79)<br>
+                    <span style="color:#f39c12;">●</span> Среднее (40-59)<br>
+                    <span style="color:#3498db;">●</span> Слабое (20-39)<br>
+                    <span style="color:#95a5a6;">●</span> Очень слабое (0-19)
+                </div>
+                
+                <div class="info-text">
+                    <strong>Как это работает:</strong><br>
+                    Барьерные слои (парки, кладбища, вода) используются для<br>
+                    разделения территории. Здания внутри одного барьерного<br>
+                    полигона кластеризуются отдельно от других.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+    
+    <script src="js/map-config.js"></script>
+    <script src="js/layers-manager.js"></script>
+    <script src="js/barriers.js"></script>
+    <script src="js/clustering.js"></script>
+    <script src="js/polygons.js"></script>
+    <script src="js/ui-controller.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>
